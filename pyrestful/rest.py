@@ -160,7 +160,8 @@ class RestHandler(tornado.web.RequestHandler):
 
 			if operation._method == self.request.method and service_name == services_from_request and len(service_params) + len(service_name) == len(services_and_params):
 				try:
-					params_values = self._find_params_value_of_url(service_name,request_path) + self._find_params_value_of_arguments(operation)
+                    has_body = (consumes is not None)
+					params_values = self._find_params_value_of_url(service_name,request_path) + self._find_params_value_of_arguments(operation, has_body)
 					p_values      = self._convert_params_values(params_values, params_types)
 					if consumes == None and produces == None:
 						consumes = content_type
@@ -170,7 +171,7 @@ class RestHandler(tornado.web.RequestHandler):
 							param_obj = xml.dom.minidom.parseString(self.request.body)
 						else:
 							param_obj = convertXML2OBJ(params_types[0],xml.dom.minidom.parseString(self.request.body).documentElement)
-						p_values.append(param_obj)
+						p_values.insert(0,param_obj)
 					elif consumes == mediatypes.APPLICATION_JSON:
 						body = self.request.body
 						if sys.version_info > (3,):
@@ -179,7 +180,7 @@ class RestHandler(tornado.web.RequestHandler):
 							param_obj = json.loads(body)
 						else:
 							param_obj = convertJSON2OBJ(params_types[0],json.loads(body))
-						p_values.append(param_obj)
+						p_values.insert(0,param_obj)
 					response = operation(*p_values)
 				
 					if response == None:
@@ -226,11 +227,14 @@ class RestHandler(tornado.web.RequestHandler):
 				i+=1
 		return values_of_query
 
-	def _find_params_value_of_arguments(self, operation):
+	def _find_params_value_of_arguments(self, operation, has_body):
 		values = []
 		if len(self.request.arguments) > 0:
 			a = operation._service_params
-			b = operation._func_params
+			if has_body:
+				b = operation._func_params[1:]
+			else:
+				b = operation._func_params
 			params = [item for item in b if item not in a]
 			for p in params:
 				if p in self.request.arguments.keys():
